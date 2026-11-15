@@ -1,0 +1,367 @@
+# Aula 07 – Computação em Nuvem
+
+## Atividade prática – Secrets e controle de acesso no Kubernetes
+
+### Introdução
+
+Nesta atividade prática, trabalhamos com alguns recursos do Kubernetes relacionados à segurança e ao controle de acesso.
+
+Durante os exercícios, criamos um namespace, trabalhamos com Secrets para armazenar informações, configuramos um ServiceAccount e utilizamos Roles e RoleBindings para definir quais ações um usuário poderia realizar dentro do ambiente.
+
+A seguir, apresento os passos realizados e o que consegui entender durante a atividade.
+
+---
+
+## PASSO 1 – Verificando os Nodes e criando um Namespace
+
+**Comando utilizado:**
+
+```bash
+kubectl get nodes
+```
+
+**Resultado:**
+
+```text
+NAME           STATUS   ROLES           AGE    VERSION
+controlplane   Ready    control-plane   9d     v1.37.1
+node01         Ready    <none>          9d     v1.37.1
+```
+
+Em seguida, criamos um namespace:
+
+```bash
+kubectl create namespace aula7
+```
+
+**Resultado:**
+
+```text
+namespace/aula7 created
+```
+
+Para verificar se foi criado:
+
+```bash
+kubectl get namespace aula7
+```
+
+**Resultado:**
+
+```text
+NAME    STATUS   AGE
+aula7   Active   22s
+```
+
+**O que eu entendi:**
+
+Primeiro, verificamos se os Nodes estavam funcionando corretamente. Os dois apresentaram o status `Ready`.
+
+Depois, criamos o namespace `aula7`, que funciona como uma forma de organizar e separar os recursos utilizados durante a atividade.
+
+---
+
+## PASSO 2 – Criando um Secret
+
+**Comando tentado:**
+
+```bash
+kubectl -n aula7 create secret generic credencial-demo
+```
+
+Depois, tentei executar:
+
+```bash
+--from-literal=senha=exemplo-123
+```
+
+**Resultado:**
+
+```text
+secret/credencial-demo created
+
+--from-literal=senha=exemplo-123: command not found
+```
+
+Ao verificar o Secret:
+
+```bash
+kubectl -n aula7 get secret credencial-demo
+```
+
+**Resultado:**
+
+```text
+NAME              TYPE     DATA   AGE
+credencial-demo   Opaque   0      52s
+```
+
+**O que eu entendi:**
+
+Nesta etapa, começamos a trabalhar com o Secret, que permite armazenar informações confidenciais, como senhas e credenciais.
+
+Durante a execução, aconteceu um erro porque o parâmetro que deveria armazenar a senha foi executado separado do comando principal. Por isso, o Secret foi criado, mas ficou sem nenhuma informação, como mostra o campo `DATA 0`.
+
+O comando correto para essa etapa seria:
+
+```bash
+kubectl -n aula7 create secret generic credencial-demo --from-literal=senha=exemplo-123
+```
+
+---
+
+## PASSO 3 – Criando o arquivo pod-secret.yaml
+
+**Comando utilizado:**
+
+```bash
+cat > pod-secret.yaml <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: leitor-secret
+  namespace: aula7
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ['sh', '-c', 'sleep 3600']
+    volumeMounts:
+    - name: credencial
+      mountPath: /segredos
+      readOnly: true
+  volumes:
+  - name: credencial
+    secret:
+      secretName: credencial-demo
+EOF
+```
+
+**O que eu entendi:**
+
+Aqui criamos um arquivo YAML para configurar um Pod chamado `leitor-secret`.
+
+Nesse arquivo, definimos a imagem BusyBox e configuramos um volume para disponibilizar as informações do Secret dentro da pasta `/segredos`.
+
+Também definimos que esse acesso seria somente para leitura, evitando alterações nos arquivos disponibilizados.
+
+---
+
+## PASSO 4 – Aplicando e testando o Pod
+
+**Comando utilizado:**
+
+```bash
+kubectl apply -f pod-secret.yaml
+```
+
+**Resultado:**
+
+```text
+pod/leitor-secret created
+```
+
+Depois, aguardamos o Pod ficar pronto:
+
+```bash
+kubectl -n aula7 wait --for=condition=Ready pod/leitor-secret --timeout=90s
+```
+
+**Resultado:**
+
+```text
+pod/leitor-secret condition met
+```
+
+Em seguida, tentamos visualizar os arquivos:
+
+```bash
+kubectl -n aula7 exec leitor-secret -- ls /segredos
+```
+
+E tentamos acessar a senha:
+
+```bash
+kubectl -n aula7 exec leitor-secret -- cat /segredos/senha
+```
+
+**Resultado:**
+
+```text
+cat: can't open '/segredos/senha': No such file or directory
+command terminated with exit code 1
+```
+
+**O que eu entendi:**
+
+Nesta etapa, conseguimos criar o Pod e confirmar que ele estava funcionando corretamente.
+
+Porém, ao tentar acessar a senha, recebemos uma mensagem informando que o arquivo não existia. Isso aconteceu porque o Secret criado no passo anterior estava vazio. Dessa forma, não havia nenhum arquivo de senha para ser disponibilizado dentro do Pod.
+
+---
+
+## PASSO 5 – Criando um ServiceAccount
+
+**Comando utilizado:**
+
+```bash
+kubectl -n aula7 create serviceaccount leitor
+```
+
+**Resultado:**
+
+```text
+serviceaccount/leitor created
+```
+
+Para verificar:
+
+```bash
+kubectl -n aula7 get serviceaccount leitor
+```
+
+**Resultado:**
+
+```text
+NAME     AGE
+leitor   25s
+```
+
+**O que eu entendi:**
+
+Criamos um ServiceAccount chamado `leitor`. Ele funciona como uma identidade que pode ser utilizada por aplicações e Pods para acessar recursos do Kubernetes.
+
+---
+
+## PASSO 6 – Criando uma Role
+
+**Comando utilizado:**
+
+```bash
+kubectl -n aula7 create role consulta-pods --verb=get,list --resource=pods
+```
+
+**Resultado:**
+
+```text
+role.rbac.authorization.k8s.io/consulta-pods created
+```
+
+Para verificar as permissões:
+
+```bash
+kubectl -n aula7 describe role consulta-pods
+```
+
+**Resultado:**
+
+```text
+Name:         consulta-pods
+Labels:       <none>
+Annotations:  <none>
+PolicyRule:
+  Resources  Non-Resource URLs  Resource Names  Verbs
+  ---------  -----------------  --------------  -----
+  pods       []                 []              [get list]
+```
+
+**O que eu entendi:**
+
+Nesta etapa, criamos uma Role chamada `consulta-pods`.
+
+Ela define quais ações podem ser realizadas. No nosso caso, permitimos apenas consultar e listar os Pods, utilizando as permissões `get` e `list`.
+
+---
+
+## PASSO 7 – Criando um RoleBinding
+
+**Comando utilizado:**
+
+```bash
+kubectl -n aula7 create rolebinding vinculo-leitor --role=consulta-pods --serviceaccount=aula7:leitor
+```
+
+**Resultado:**
+
+```text
+rolebinding.rbac.authorization.k8s.io/vinculo-leitor created
+```
+
+Para verificar:
+
+```bash
+kubectl -n aula7 describe rolebinding vinculo-leitor
+```
+
+**Resultado:**
+
+```text
+Name:         vinculo-leitor
+Labels:       <none>
+Annotations:  <none>
+Role:
+  Kind:  Role
+  Name:  consulta-pods
+Subjects:
+  Kind            Name    Namespace
+  ----            ----    ---------
+  ServiceAccount  leitor  aula7
+```
+
+**O que eu entendi:**
+
+Aqui criamos um RoleBinding para conectar o ServiceAccount `leitor` à Role `consulta-pods`.
+
+Na prática, isso significa que vinculamos a identidade do leitor às permissões definidas anteriormente.
+
+---
+
+## PASSO 8 – Testando as permissões
+
+Primeiro, verificamos se o ServiceAccount poderia consultar os Pods:
+
+```bash
+kubectl auth can-i get pods -n aula7 --as=system:serviceaccount:aula7:leitor
+```
+
+**Resultado:**
+
+```text
+yes
+```
+
+Depois, verificamos se poderia excluir Pods:
+
+```bash
+kubectl auth can-i delete pods -n aula7 --as=system:serviceaccount:aula7:leitor
+```
+
+**Resultado:**
+
+```text
+no
+```
+
+**O que eu entendi:**
+
+Nesta última etapa, testamos as permissões que configuramos.
+
+O resultado `yes` mostrou que o ServiceAccount tinha autorização para consultar os Pods.
+
+Já o resultado `no` mostrou que ele não tinha permissão para excluir Pods.
+
+Isso confirmou que as permissões foram configuradas de acordo com o que definimos na Role, permitindo apenas as ações necessárias.
+
+---
+
+## Conclusão
+
+Com essa atividade, consegui entender melhor como funciona a parte de segurança e controle de acesso no Kubernetes.
+
+Aprendi que o Secret permite guardar informações confidenciais, enquanto o ServiceAccount funciona como uma identidade para acessar os recursos do ambiente.
+
+Também conheci as Roles e os RoleBindings, que ajudam a definir e vincular as permissões de cada identidade.
+
+Mesmo com o erro na criação do Secret, consegui acompanhar as outras etapas e entender como funciona a autorização dentro do Kubernetes.
+
+**Atividade prática – Aula 07 | Computação em Nuvem**
