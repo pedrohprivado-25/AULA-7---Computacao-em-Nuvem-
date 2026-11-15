@@ -1,0 +1,79 @@
+# Desafio Prático – Aula 07 | Computação em Nuvem
+
+## PASSO 9 – Atualizando as permissões da Role
+
+Neste passo, atualizei a Role `consulta-pods`, adicionando a permissão `watch`, que permite acompanhar alterações nos Pods.
+
+**Comando utilizado:**
+
+```bash
+kubectl -n aula7 create role consulta-pods --verb=get,list,watch --resource=pods --dry-run=client -o yaml | kubectl apply -f -
+```
+
+**Resultado:**
+
+```text
+role.rbac.authorization.k8s.io/consulta-pods configured
+```
+
+Foi apresentado um aviso sobre a anotação `last-applied-configuration`, mas a atualização foi realizada corretamente.
+
+## PASSO 10 – Testando a permissão WATCH
+
+Depois de atualizar a Role, executei um teste para verificar se a ServiceAccount `leitor` tinha autorização para acompanhar os Pods.
+
+**Comando utilizado:**
+
+```bash
+kubectl auth can-i watch pods -n aula7 --as=system:serviceaccount:aula7:leitor
+```
+
+**Resultado:**
+
+```text
+yes
+```
+
+O resultado confirmou que a permissão `watch` foi concedida corretamente.
+
+## PASSO 11 – Excluindo o Namespace
+
+Após concluir os testes, realizei a exclusão do namespace `aula7`.
+
+**Comando utilizado:**
+
+```bash
+kubectl delete namespace aula7
+```
+
+**Resultado:**
+
+```text
+namespace "aula7" deleted
+```
+
+Com esse comando, o namespace foi excluído juntamente com os recursos que estavam dentro dele.
+
+## PASSO 12 – Verificando a exclusão do Namespace
+
+Por último, tentei consultar novamente o namespace para confirmar se ele ainda existia.
+
+**Comando utilizado:**
+
+```bash
+kubectl get namespace aula7
+```
+
+**Resultado:**
+
+```text
+Error from server (NotFound): namespaces "aula7" not found
+```
+
+Essa mensagem era esperada, pois o namespace já havia sido excluído no passo anterior.
+
+## Conclusão
+
+Nesta etapa final do desafio, atualizei as permissões da Role, confirmei que a ServiceAccount tinha autorização para utilizar a permissão `watch` e finalizei a atividade excluindo o namespace `aula7`.
+
+Assim, concluí os testes de permissões e a limpeza dos recursos utilizados durante o desafio prático.
